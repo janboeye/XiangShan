@@ -380,7 +380,8 @@ class BankedDataArray(implicit p: Parameters) extends AbstractBankedDataArray {
       // use ECC to check error
       val ecc_data = read_result(bank_index)(way_index).asECCData()
       val ecc_data_delayed = RegEnable(ecc_data, RegNext(read_en))
-      read_result(bank_index)(way_index).error_delayed := dcacheParameters.dataCode.decode(ecc_data_delayed).error
+//      read_result(bank_index)(way_index).error_delayed := dcacheParameters.dataCode.decode(ecc_data_delayed).error
+      read_result(bank_index)(way_index).error_delayed := false.B
       read_error_delayed_result(bank_index)(way_index) := read_result(bank_index)(way_index).error_delayed
     }
   }
@@ -412,18 +413,22 @@ class BankedDataArray(implicit p: Parameters) extends AbstractBankedDataArray {
   // error detection
   // normal read ports
   (0 until LoadPipelineWidth).map(rport_index => {
-    when(io.is128Req(rport_index)){ //TODO:when have is128Req
+    val rr_read_fire = RegNext(RegNext(io.read(rport_index).fire()))
+    val rr_bank_addr = RegNext(RegNext(bank_addrs(rport_index)))
+    val rr_way_addr = RegNext(RegNext(OHToUInt(way_en(rport_index))))
+//    when(io.is128Req(rport_index)){ //TODO:when have is128Req
       (0 until VLEN/DCacheSRAMRowBits).map( j =>{
-        io.read_error_delayed(rport_index)(j) := RegNext(RegNext(io.read(rport_index).fire())) &&
-          read_error_delayed_result(RegNext(RegNext(bank_addrs(rport_index)(j))))(RegNext(RegNext(OHToUInt(way_en(rport_index))))) &&
+        io.read_resp_delayed(rport_index)(j) := read_result_delayed(rr_bank_addr(j))(rr_way_addr)
+        io.read_error_delayed(rport_index)(j) :=  rr_read_fire &&
+          read_error_delayed_result(rr_bank_addr(j))(rr_way_addr) &&
           !RegNext(io.bank_conflict_slow(rport_index))
       })
-    }.otherwise{
-      io.read_error_delayed(rport_index)(0) := RegNext(RegNext(io.read(rport_index).fire())) &&
-        read_error_delayed_result(RegNext(RegNext(bank_addrs(rport_index)(0))))(RegNext(RegNext(OHToUInt(way_en(rport_index))))) &&
-        !RegNext(io.bank_conflict_slow(rport_index))
-      io.read_error_delayed(rport_index)(1) := DontCare
-    }
+//    }.otherwise{
+//      io.read_error_delayed(rport_index)(0) := rr_read_fire &&
+//        read_error_delayed_result(rr_bank_addr(0))(rr_way_addr) &&
+//        !RegNext(io.bank_conflict_slow(rport_index))
+//      io.read_error_delayed(rport_index)(1) := DontCare
+//    }
     //io.read_error_delayed(rport_index) := RegNext(RegNext(io.read(rport_index).fire())) &&
     //  read_error_delayed_result(RegNext(RegNext(bank_addrs(rport_index))))(RegNext(RegNext(OHToUInt(way_en(rport_index))))) &&
     //  !RegNext(io.bank_conflict_slow(rport_index))
